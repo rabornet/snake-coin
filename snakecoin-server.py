@@ -1,15 +1,16 @@
-""" SNAKE COIN SAMPLE NODE
+""" SNAKE COIN MULTI-NODE SERVER
     Based on Gerald Nash's "Let's Make the Tiniest Blockchain Bigger"
     https://medium.com/crypto-currently/lets-make-the-tiniest-blockchain-bigger-ac360a328f4d
     https://gist.github.com/aunyks/47d157f8bc7d1829a729c2a6a919c173
 
     Adapted to my own style preferences.
+    Added simulated multi-node support.
 """
-
 from flask import Flask
 from flask import request
 node = Flask(__name__)
 
+from copy import copy
 import datetime as date
 import hashlib as hasher
 import json
@@ -81,7 +82,7 @@ class Node(object):
     for chain in peer_chains:
       if len(longest_chain) < len(chain):
         longest_chain = chain
-    self.blockchain = longest_chain
+    self.blockchain = copy(longest_chain)
 
   def to_dict(self):
     return {
@@ -99,8 +100,8 @@ class Node(object):
 # Multi Node Network Simulation
 network_dict = dict()
 genesis_list = [Block.genesis()]
-for n in range(1,21):
-  node_address = 'node{:02}'.format(n)
+for n in range(1,6):
+  node_address = 'node{}'.format(n)
   network_dict.update({
     node_address: Node(address=node_address, blockchain=genesis_list)
   })
@@ -118,7 +119,7 @@ def get_node(network_node=None):
 def get_peer_blockchains():
   """ simulate network communication with peer nodes on the network
   """
-  return map(lambda peer_node: map(lambda blockchain: blockchain.to_dict(), peer_node.blockchain), network_dict.values())
+  return map(lambda peer_node: peer_node.blockchain, network_dict.values())
 
 ###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~###~
 
@@ -126,11 +127,16 @@ def get_peer_blockchains():
 ##  NODE ROUTING
 #
 
+@node.route('/chains/<node_key>', methods=['GET'])
+def chains(node_key):
+  this_node = get_node(node_key)
+  return json.dumps(map(lambda blockchain: blockchain.to_dict(), this_node.blockchain))
+
 @node.route('/mine/<node_key>', methods=['GET'])
 def mine(node_key):
   # dynamic host node
   this_node = get_node(node_key)
-  print(this_node.to_json())
+  # print(this_node.to_json())
 
   # Establish consensus with the network.
   this_node.consensus()
@@ -164,31 +170,35 @@ def mine(node_key):
   this_node.blockchain.append(mined_block)
 
   # Clean up
-  this_node.transactions = list()
+  this_node.transactions[:] = []
 
   # Inform the client
-  return """
-<pre>{}</pre>
-""".format(mined_block.to_json())
+  return mined_block.to_json()
+
+@node.route('/node_keys', methods=['GET'])
+def node_keys():
+  return json.dumps(network_keys)
 
 # Host it...
 node.run()
 
 
-@node.route('/txion', methods=['POST'])
-def transaction():
-  # Extract the transaction data
-  new_txion = request.get_json()
-
-  # Add the transaction to our list
-  # TRANSACTIONS.append(new_txion)
-
-  # Log the transaction to our console
-  print "New transaction"
-  print "From: {}".format(new_txion['from'].encode('ascii','replace'))
-  print "To: {}".format(new_txion['to'].encode('ascii','replace'))
-  print "AMOUNT: {}\n".format(new_txion['amount'])
-
-  # Let the client know it worked out
-  return "Transaction submission successful\n"
+# THIS IMPLEMENTATION STILL REQUIRES A FUNCTIONING TRANSACTION QUEUE
+# @node.route('/txion', methods=['POST'])
+# def transaction():
+#
+#   # Extract the transaction data
+#   new_txion = request.get_json()
+#
+#   # Add the transaction to our list
+#   # TRANSACTIONS.append(new_txion)
+#
+#   # Log the transaction to our console
+#   print "New transaction"
+#   print "From: {}".format(new_txion['from'].encode('ascii','replace'))
+#   print "To: {}".format(new_txion['to'].encode('ascii','replace'))
+#   print "AMOUNT: {}\n".format(new_txion['amount'])
+#
+#   # Let the client know it worked out
+#   return "Transaction submission successful\n"
 
